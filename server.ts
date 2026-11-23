@@ -288,6 +288,78 @@ function parseDataUrl(input: string): { mimeType: string; data: string } | null 
   return { mimeType, data };
 }
 
+function generateFallbackPlan(briefingText: string, selectedAngles: string[]) {
+  const clean = briefingText.replace(/\s+/g, ' ').trim();
+  const firstSentence = clean.split(/[.!?\n]/)[0]?.trim() || clean;
+  const productName =
+    firstSentence.length > 48 ? firstSentence.slice(0, 45).trimEnd() + '...' : firstSentence;
+  const prices = (clean.match(/(?:\d+x\s*de\s*)?R\$\s*\d+(?:[.,]\d{1,2})?/gi) ?? []).map((p) => p.trim());
+  const firstPrice = prices[0] ?? '';
+  const secondPrice = prices[1] ?? '';
+  const offerAnchor = firstPrice && secondPrice ? `De ${firstPrice}` : '';
+  const offerPrice =
+    firstPrice && secondPrice
+      ? `Por ${secondPrice}`
+      : firstPrice
+      ? `Por ${firstPrice}`
+      : 'Condição Especial Hoje';
+  const lower = clean.toLowerCase();
+  const ctaVisualText =
+    lower.includes('whatsapp') || lower.includes('mensagem') || lower.includes('agendar')
+      ? 'TOQUE E FALE AGORA'
+      : 'TOQUE EM SAIBA MAIS';
+  const trustLine = clean.match(/garantia[^.,;!\n]{0,40}/i)?.[0]?.trim() || 'Compra segura com garantia';
+
+  const creatives = selectedAngles.map((key, index) => {
+    const info = ANGLE_CATALOG[key] || ANGLE_CATALOG['dor'];
+    return {
+      id: `fallback_${index + 1}`,
+      angleKey: key,
+      angleLabel: info.label,
+      strategicRationale: `Estratégia focada em ${info.label.toLowerCase()} com copy de alta conversão para tráfego direto.`,
+      visualMood: 'impact',
+      aida: {
+        qualifierBadge: 'EXCLUSIVO PARA COMPRADORES',
+        headlineLine1: key === 'desejo' ? 'O RESULTADO QUE' : key === 'escassez' ? 'ÚLTIMAS HORAS' : 'PARE DE PERDER',
+        headlineLine2: key === 'desejo' ? 'VOCÊ SEMPRE QUIS' : key === 'escassez' ? 'GARANTA O SEU' : 'RESOLVA AGORA',
+        subtitle: firstSentence.slice(0, 68),
+        bullets: [
+          'Focado no resultado que você busca',
+          'Qualidade comprovada na prática',
+          'Entrega rápida e garantia clara',
+        ],
+        trustLine,
+        offerAnchor,
+        offerPrice,
+        urgencyTag: 'Oferta por tempo limitado',
+        ctaVisualText,
+      },
+      adKit: {
+        ctaButton: 'Saiba mais',
+        adHeadline: `${productName} — ${offerPrice}`.slice(0, 48),
+        primaryText: `${firstSentence}\n\n${clean}\n\nGaranta sua condição especial hoje mesmo!`,
+      },
+      colorScheme: {
+        bgTop: '#0F172A',
+        bgBottom: '#1E293B',
+        accentKeyword: '#FBBF24',
+        accentUrgency: '#EF4444',
+        ctaBg: '#10B981',
+        ctaText: '#FFFFFF',
+      },
+    };
+  });
+
+  return {
+    productAnalysis: {
+      productName,
+      visualPreservationNotes: 'Produto preservado com fundo comercial valorizado.',
+      idealContext: clean,
+    },
+    creatives,
+  };
+}
+
 function mapGeminiError(err: unknown): { status: number; errorCode: string; message: string } {
   const rawMessage = err instanceof Error ? err.message : String(err);
 
@@ -469,6 +541,11 @@ async function startServer() {
         })
         .join('\n');
 
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+        return res.json(generateFallbackPlan(briefing, selectedAngles));
+      }
+
       const ai = getGeminiClient();
 
       const systemInstruction = `Você é um Diretor de Criação Sênior e Copywriter de Tráfego Direto (Brasil).
@@ -607,60 +684,6 @@ REGRAS:
           },
         });
       };
-
-function generateFallbackPlan(briefingText: string, selectedAngles: string[]) {
-  const cleanBriefing = briefingText.trim();
-  const summaryTitle = cleanBriefing.length > 40 ? cleanBriefing.slice(0, 40) + '...' : cleanBriefing;
-
-  const creatives = selectedAngles.map((key, index) => {
-    const info = ANGLE_CATALOG[key] || ANGLE_CATALOG['dor'];
-    return {
-      id: `fallback_${index + 1}`,
-      angleKey: key,
-      angleLabel: info.label,
-      strategicRationale: `Estratégia focada em ${info.label.toLowerCase()} com copy de alta conversão para tráfego direto.`,
-      visualMood: 'impact',
-      aida: {
-        qualifierBadge: 'EXCLUSIVO PARA COMPRADORES',
-        headlineLine1: 'TRANSFORME SUA',
-        headlineLine2: 'RESULTADO AGORA',
-        subtitle: summaryTitle,
-        bullets: [
-          'Garantia de satisfação e qualidade',
-          'Entrega rápida e segura',
-          'Suporte dedicado ao cliente',
-        ],
-        trustLine: 'Milhares de clientes satisfeitos',
-        offerAnchor: 'De R$ 197,00',
-        offerPrice: 'Por apenas R$ 97,00 hoje',
-        urgencyTag: 'Oferta por tempo limitado',
-        ctaVisualText: 'TOQUE EM SAIBA MAIS',
-      },
-      adKit: {
-        ctaButton: 'Saiba mais',
-        adHeadline: summaryTitle,
-        primaryText: `Descubra a solução ideal para o que você procura. Nossa oferta foi desenvolvida para entregar o máximo de resultado com total segurança.\n\n${cleanBriefing}\n\nGaranta sua condição especial hoje mesmo!`,
-      },
-      colorScheme: {
-        bgTop: '#0F172A',
-        bgBottom: '#1E293B',
-        accentKeyword: '#FBBF24',
-        accentUrgency: '#EF4444',
-        ctaBg: '#10B981',
-        ctaText: '#FFFFFF',
-      },
-    };
-  });
-
-  return {
-    productAnalysis: {
-      productName: summaryTitle,
-      visualPreservationNotes: 'Produto preservado com fundo comercial valorizado.',
-      idealContext: cleanBriefing,
-    },
-    creatives,
-  };
-}
 
       let response;
       const modelsToTry: Array<{ model: string; useLowThinking: boolean }> = [

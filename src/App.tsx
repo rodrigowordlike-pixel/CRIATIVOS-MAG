@@ -6,6 +6,11 @@ import { CreativeGallery } from '@/src/components/CreativeGallery';
 import { PaywallModal, PaywallModalMode } from '@/src/components/PaywallModal';
 import { compressImageForApi, renderAllFormatsForBlueprint } from '@/src/lib/studioRenderer';
 import {
+  activateKeyLocally,
+  buildLocalCreativePlan,
+  getLocalLicenseStatus,
+} from '@/src/lib/localFallback';
+import {
   AidaCopy,
   AngleKey,
   AspectFormatId,
@@ -94,12 +99,19 @@ async function dataUrlToUint8Array(dataUrl: string): Promise<Uint8Array> {
   return new Uint8Array(buf);
 }
 
+class ApiUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApiUnavailableError';
+  }
+}
+
 async function safePostJson<T>(
   url: string,
   payload: unknown,
   authToken?: string | null,
-  retries = 4,
-  delayMs = 1200
+  retries = 2,
+  delayMs = 350
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -112,7 +124,7 @@ async function safePostJson<T>(
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < retries; attempt++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout for AI planning
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -127,20 +139,16 @@ async function safePostJson<T>(
       try {
         data = text ? JSON.parse(text) : null;
       } catch {
-        if (res.status === 404 || res.status === 502 || res.status === 503 || res.status === 504) {
-          if (attempt < retries - 1) {
-            await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
-            continue;
-          }
-          throw new Error(
-            'Gerando criativos otimizados... Tente clicar em Gerar novamente.'
-          );
+        if (res.status === 404 || res.status >= 500) {
+          throw new ApiUnavailableError(`API unavailable (${res.status})`);
         }
-        throw new Error(
-          `O servidor retornou uma resposta inesperada (HTTP ${res.status}). Recarregue a página e tente novamente.`
-        );
+        throw new ApiUnavailableError(`Unexpected non-JSON response (${res.status})`);
       }
+
       if (!res.ok) {
+        if (res.status >= 502) {
+          throw new ApiUnavailableError(`API upstream unavailable (${res.status})`);
+        }
         const errMsg =
           data && typeof data === 'object' && 'message' in data && typeof data.message === 'string'
             ? data.message
@@ -150,17 +158,18 @@ async function safePostJson<T>(
       return data as T;
     } catch (err) {
       clearTimeout(timeoutId);
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (err instanceof Error && err.name === 'AbortError') {
-        lastError = new Error('A geração demorou mais que o esperado (tempo limite de 45s). Tente novamente.');
+      if (err instanceof ApiUnavailableError || (err instanceof Error && (err.name === 'AbortError' || err instanceof TypeError))) {
+        lastError = new ApiUnavailableError(err.message);
+        if (attempt < retries - 1) {
+          await new Promise((r) => setTimeout(r, delayMs));
+          continue;
+        }
+        throw lastError;
       }
-      if (attempt < retries - 1) {
-        await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
-        continue;
-      }
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
-  throw lastError ?? new Error('Falha de conexão com o servidor. Verifique sua internet.');
+  throw lastError ?? new ApiUnavailableError('API unreachable');
 }
 
 export default function App() {
@@ -200,19 +209,29 @@ export default function App() {
     fetch('/api/license/status', { headers })
       .then((r) => (r.ok ? r.json() : null))
       .then((status: LicenseStatus | null) => {
-        if (cancelled || !status) return;
-        setLicense(status);
-        if (!status.active && !status.isExpired && savedToken) {
+        if (cancelled) return;
+        const resolved = status && (status.active || status.isExpired) ? status : getLocalLicenseStatus() ?? status;
+        if (!resolved) return;
+        setLicense(resolved);
+        if (!resolved.active && !resolved.isExpired && savedToken) {
           saveStoredAuthToken(null);
           setAuthToken(null);
         }
-        if (status.isExpiringSoon || status.isExpired) {
+        if (resolved.isExpiringSoon || resolved.isExpired) {
           setPaywallMode('expiring');
           setIsPaywallOpen(true);
         }
       })
       .catch(() => {
-        // stay on default free status
+        if (cancelled) return;
+        const localStatus = getLocalLicenseStatus();
+        if (localStatus) {
+          setLicense(localStatus);
+          if (localStatus.isExpiringSoon || localStatus.isExpired) {
+            setPaywallMode('expiring');
+            setIsPaywallOpen(true);
+          }
+        }
       });
     return () => {
       cancelled = true;
@@ -272,6 +291,19 @@ export default function App() {
           : `${res.planLabel} ativado com sucesso! Liberado até ${res.maxAngles} ângulos por geração (${res.daysRemaining} dias restantes).`,
       };
     } catch (err) {
+      if (err instanceof ApiUnavailableError) {
+        const localRes = await activateKeyLocally(rawKey);
+        if (!localRes.ok) {
+          return { ok: false, message: localRes.message };
+        }
+        setLicense(localRes.status);
+        return {
+          ok: true,
+          message: localRes.status.isLifetime
+            ? 'Acesso Vitalício ativado! Todos os 10 ângulos estão liberados para sempre sem prazo de vencimento.'
+            : `${localRes.status.planLabel} ativado com sucesso! Liberado até ${localRes.status.maxAngles} ângulos por geração (${localRes.status.daysRemaining} dias restantes).`,
+        };
+      }
       return {
         ok: false,
         message: err instanceof Error ? err.message : 'Não foi possível validar esta chave.',
@@ -304,17 +336,27 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     try {
-      const apiImage = await compressImageForApi(referenceImage);
-      const plan = await safePostJson<PlanResponse>(
-        '/api/creatives/plan',
-        {
-          imageDataUrl: apiImage,
-          briefing: briefing.trim(),
-          count: effectiveCount,
-          singleAngle,
-        },
-        authToken
-      );
+      let plan: PlanResponse;
+      try {
+        const apiImage = await compressImageForApi(referenceImage);
+        plan = await safePostJson<PlanResponse>(
+          '/api/creatives/plan',
+          {
+            imageDataUrl: apiImage,
+            briefing: briefing.trim(),
+            count: effectiveCount,
+            singleAngle,
+          },
+          authToken
+        );
+      } catch (apiErr) {
+        if (apiErr instanceof ApiUnavailableError) {
+          plan = buildLocalCreativePlan(briefing.trim(), effectiveCount, singleAngle);
+        } else {
+          throw apiErr;
+        }
+      }
+
       setProductAnalysis(plan.productAnalysis);
 
       const renderedList = await Promise.all(
