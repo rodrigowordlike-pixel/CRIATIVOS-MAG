@@ -44,20 +44,23 @@ function loadOrCreateSigningSecret(): string {
 const LICENSE_SIGNING_SECRET = loadOrCreateSigningSecret();
 
 interface LicensePlanSpec {
-  planId: '30d' | '90d' | '120d';
+  planId: '30d' | '90d' | '120d' | 'lifetime';
   planLabel: string;
-  durationDays: number;
+  durationDays: number | null;
   maxAngles: number;
 }
 
-const PLAN_SPECS: Record<'30d' | '90d' | '120d', LicensePlanSpec> = {
+const PLAN_SPECS: Record<'30d' | '90d' | '120d' | 'lifetime', LicensePlanSpec> = {
   '30d': { planId: '30d', planLabel: 'Plano 30 Dias', durationDays: 30, maxAngles: 3 },
   '90d': { planId: '90d', planLabel: 'Plano 90 Dias', durationDays: 90, maxAngles: 5 },
   '120d': { planId: '120d', planLabel: 'Plano 120 Dias', durationDays: 120, maxAngles: 10 },
+  lifetime: { planId: 'lifetime', planLabel: 'Acesso Vitalício', durationDays: null, maxAngles: 10 },
 };
 
-// SHA-256 hashes of the 15 generated access keys (5 per plan)
+// SHA-256 hashes of the generated access keys (5 per plan + 1 owner lifetime key)
 const LICENSE_HASH_CATALOG: Record<string, LicensePlanSpec> = {
+  // Chave Vitalícia (Proprietário)
+  '7ca4ff5c3d06f3f2e89b04650420d64b772a2d04760581aaf9b29b756b0a35ff': PLAN_SPECS.lifetime,
   // 30 Dias (5 keys)
   '6d58920df0bc47168c4de197393a062adb6175c4829afa4937aac618aca557d4': PLAN_SPECS['30d'],
   '1a4e35a7e381d61748a42c13fdd108313d0f64037105eb4a5ca6467e58c16554': PLAN_SPECS['30d'],
@@ -79,9 +82,9 @@ const LICENSE_HASH_CATALOG: Record<string, LicensePlanSpec> = {
 };
 
 interface ActivatedLicenseRecord {
-  planId: '30d' | '90d' | '120d';
+  planId: '30d' | '90d' | '120d' | 'lifetime';
   activatedAt: number;
-  expiresAt: number;
+  expiresAt: number | null;
 }
 
 let memoryLicenseStore: Record<string, ActivatedLicenseRecord> = {};
@@ -176,11 +179,12 @@ function getLicenseStatusFromRequest(req: express.Request) {
   const record = store[keyHash];
   if (!record) return freeStatus;
 
+  const isLifetime = spec.durationDays === null || record.expiresAt === null;
   const now = Date.now();
-  const msLeft = record.expiresAt - now;
-  const isExpired = msLeft <= 0;
-  const daysRemaining = isExpired ? 0 : Math.max(1, Math.ceil(msLeft / DAY_MS));
-  const isExpiringSoon = !isExpired && daysRemaining <= EXPIRING_SOON_DAYS;
+  const msLeft = isLifetime ? Number.MAX_SAFE_INTEGER : (record.expiresAt as number) - now;
+  const isExpired = !isLifetime && msLeft <= 0;
+  const daysRemaining = isLifetime ? 9999 : isExpired ? 0 : Math.max(1, Math.ceil(msLeft / DAY_MS));
+  const isExpiringSoon = !isLifetime && !isExpired && daysRemaining <= EXPIRING_SOON_DAYS;
 
   return {
     active: !isExpired,
@@ -192,6 +196,7 @@ function getLicenseStatusFromRequest(req: express.Request) {
     daysRemaining,
     isExpiringSoon,
     isExpired,
+    isLifetime,
   };
 }
 
@@ -373,22 +378,23 @@ async function startServer() {
       record = {
         planId: spec.planId,
         activatedAt: now,
-        expiresAt: now + spec.durationDays * DAY_MS,
+        expiresAt: spec.durationDays === null ? null : now + spec.durationDays * DAY_MS,
       };
       store[keyHash] = record;
       writeLicenseStore(store);
     }
 
-    const msLeft = record.expiresAt - now;
-    if (msLeft <= 0) {
+    const isLifetime = spec.durationDays === null || record.expiresAt === null;
+    const msLeft = isLifetime ? 3650 * DAY_MS : (record.expiresAt as number) - now;
+    if (!isLifetime && msLeft <= 0) {
       return res.status(403).json({
         errorCode: 'KEY_EXPIRED',
         message: 'Esta chave já venceu! Renove pelo WhatsApp (41) 99822-1261 para receber uma nova chave.',
       });
     }
 
-    const daysRemaining = Math.max(1, Math.ceil(msLeft / DAY_MS));
-    const isExpiringSoon = daysRemaining <= EXPIRING_SOON_DAYS;
+    const daysRemaining = isLifetime ? 9999 : Math.max(1, Math.ceil(msLeft / DAY_MS));
+    const isExpiringSoon = !isLifetime && daysRemaining <= EXPIRING_SOON_DAYS;
     const token = signLicenseToken(keyHash);
     setLicenseSessionCookie(req, res, token, msLeft);
 
@@ -402,6 +408,7 @@ async function startServer() {
       daysRemaining,
       isExpiringSoon,
       isExpired: false,
+      isLifetime,
       token,
     });
   });

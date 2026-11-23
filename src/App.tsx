@@ -97,7 +97,9 @@ async function dataUrlToUint8Array(dataUrl: string): Promise<Uint8Array> {
 async function safePostJson<T>(
   url: string,
   payload: unknown,
-  authToken?: string | null
+  authToken?: string | null,
+  retries = 3,
+  delayMs = 800
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -106,33 +108,50 @@ async function safePostJson<T>(
   if (authToken) {
     headers['Authorization'] = `Bearer ${authToken}`;
   }
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
-  });
-  const text = await res.text();
-  let data: unknown = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    if (res.status === 404) {
-      throw new Error(
-        'O servidor de API não respondeu nesta URL (HTTP 404). Se estiver no link compartilhado, aguarde a publicação concluir ou acesse pelo link principal do estúdio.'
-      );
+
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      let data: unknown = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        if (res.status === 404 || res.status === 502 || res.status === 503) {
+          if (attempt < retries - 1) {
+            await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
+            continue;
+          }
+          throw new Error(
+            'O servidor está aquecendo ou a rota de API ainda não respondeu. Tente novamente em alguns segundos.'
+          );
+        }
+        throw new Error(
+          `O servidor retornou uma resposta inesperada (HTTP ${res.status}). Recarregue a página e tente novamente.`
+        );
+      }
+      if (!res.ok) {
+        const errMsg =
+          data && typeof data === 'object' && 'message' in data && typeof data.message === 'string'
+            ? data.message
+            : `Falha na requisição (HTTP ${res.status}).`;
+        throw new Error(errMsg);
+      }
+      return data as T;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < retries - 1) {
+        await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
+        continue;
+      }
     }
-    throw new Error(
-      `O servidor retornou uma resposta inesperada (HTTP ${res.status}). Recarregue a página e tente novamente.`
-    );
   }
-  if (!res.ok) {
-    const errMsg =
-      data && typeof data === 'object' && 'message' in data && typeof data.message === 'string'
-        ? data.message
-        : `Falha na requisição (HTTP ${res.status}).`;
-    throw new Error(errMsg);
-  }
-  return data as T;
+  throw lastError ?? new Error('Falha de conexão com o servidor.');
 }
 
 export default function App() {
@@ -235,10 +254,13 @@ export default function App() {
         daysRemaining: res.daysRemaining,
         isExpiringSoon: res.isExpiringSoon,
         isExpired: res.isExpired,
+        isLifetime: res.isLifetime,
       });
       return {
         ok: true,
-        message: `${res.planLabel} ativado com sucesso! Liberado até ${res.maxAngles} ângulos por geração (${res.daysRemaining} dias restantes).`,
+        message: res.isLifetime
+          ? 'Acesso Vitalício ativado! Todos os 10 ângulos estão liberados para sempre sem prazo de vencimento.'
+          : `${res.planLabel} ativado com sucesso! Liberado até ${res.maxAngles} ângulos por geração (${res.daysRemaining} dias restantes).`,
       };
     } catch (err) {
       return {

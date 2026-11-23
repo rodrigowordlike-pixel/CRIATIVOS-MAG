@@ -269,7 +269,9 @@ export function StudioSidebar({
             <KeyRound className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
             {license.active ? (
               <span>
-                {license.planLabel} · {license.daysRemaining}d
+                {license.isLifetime || license.planId === 'lifetime'
+                  ? 'Acesso Vitalício'
+                  : `${license.planLabel} · ${license.daysRemaining}d`}
               </span>
             ) : (
               <span>Ativar chave</span>

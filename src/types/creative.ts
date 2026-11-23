@@ -137,7 +137,7 @@ export interface RenderedCreative {
   images: Record<AspectFormatId, string>;
 }
 
-export type LicensePlanId = 'free' | '30d' | '90d' | '120d';
+export type LicensePlanId = 'free' | '30d' | '90d' | '120d' | 'lifetime';
 
 export interface LicenseStatus {
   active: boolean;
@@ -149,4 +149,5 @@ export interface LicenseStatus {
   daysRemaining: number;
   isExpiringSoon: boolean;
   isExpired: boolean;
+  isLifetime?: boolean;
 }
