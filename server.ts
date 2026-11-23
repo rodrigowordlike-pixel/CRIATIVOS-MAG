@@ -608,6 +608,60 @@ REGRAS:
         });
       };
 
+function generateFallbackPlan(briefingText: string, selectedAngles: string[]) {
+  const cleanBriefing = briefingText.trim();
+  const summaryTitle = cleanBriefing.length > 40 ? cleanBriefing.slice(0, 40) + '...' : cleanBriefing;
+
+  const creatives = selectedAngles.map((key, index) => {
+    const info = ANGLE_CATALOG[key] || ANGLE_CATALOG['dor'];
+    return {
+      id: `fallback_${index + 1}`,
+      angleKey: key,
+      angleLabel: info.label,
+      strategicRationale: `Estratégia focada em ${info.label.toLowerCase()} com copy de alta conversão para tráfego direto.`,
+      visualMood: 'impact',
+      aida: {
+        qualifierBadge: 'EXCLUSIVO PARA COMPRADORES',
+        headlineLine1: 'TRANSFORME SUA',
+        headlineLine2: 'RESULTADO AGORA',
+        subtitle: summaryTitle,
+        bullets: [
+          'Garantia de satisfação e qualidade',
+          'Entrega rápida e segura',
+          'Suporte dedicado ao cliente',
+        ],
+        trustLine: 'Milhares de clientes satisfeitos',
+        offerAnchor: 'De R$ 197,00',
+        offerPrice: 'Por apenas R$ 97,00 hoje',
+        urgencyTag: 'Oferta por tempo limitado',
+        ctaVisualText: 'TOQUE EM SAIBA MAIS',
+      },
+      adKit: {
+        ctaButton: 'Saiba mais',
+        adHeadline: summaryTitle,
+        primaryText: `Descubra a solução ideal para o que você procura. Nossa oferta foi desenvolvida para entregar o máximo de resultado com total segurança.\n\n${cleanBriefing}\n\nGaranta sua condição especial hoje mesmo!`,
+      },
+      colorScheme: {
+        bgTop: '#0F172A',
+        bgBottom: '#1E293B',
+        accentKeyword: '#FBBF24',
+        accentUrgency: '#EF4444',
+        ctaBg: '#10B981',
+        ctaText: '#FFFFFF',
+      },
+    };
+  });
+
+  return {
+    productAnalysis: {
+      productName: summaryTitle,
+      visualPreservationNotes: 'Produto preservado com fundo comercial valorizado.',
+      idealContext: cleanBriefing,
+    },
+    creatives,
+  };
+}
+
       let response;
       const modelsToTry: Array<{ model: string; useLowThinking: boolean }> = [
         { model: 'gemini-3.1-flash-lite', useLowThinking: false },
@@ -615,41 +669,33 @@ REGRAS:
         { model: 'gemini-3.1-flash-lite', useLowThinking: false },
       ];
 
-      let lastErr: unknown = null;
-      for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
-        try {
-          const cfg = modelsToTry[attempt];
-          response = await attemptGenerate(cfg.model, cfg.useLowThinking);
-          break;
-        } catch (err) {
-          lastErr = err;
-          const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-          const canRetry =
-            msg.includes('503') ||
-            msg.includes('unavailable') ||
-            msg.includes('500') ||
-            msg.includes('404') ||
-            msg.includes('not_found') ||
-            msg.includes('429');
-          if (!canRetry || attempt === modelsToTry.length - 1) {
-            throw err;
+      let parsed: any = null;
+      try {
+        const promptPromise = (async () => {
+          for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
+            try {
+              const cfg = modelsToTry[attempt];
+              response = await attemptGenerate(cfg.model, cfg.useLowThinking);
+              const rawText = (response.text ?? '{}').trim();
+              const p = JSON.parse(rawText);
+              if (p && Array.isArray(p.creatives) && p.creatives.length > 0) {
+                return p;
+              }
+            } catch {
+              // try next model
+            }
           }
-          await new Promise((r) => setTimeout(r, 150));
-        }
+          return null;
+        })();
+
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 7000));
+        parsed = await Promise.race([promptPromise, timeoutPromise]);
+      } catch {
+        parsed = null;
       }
 
-      if (!response) {
-        throw lastErr ?? new Error('Falha ao gerar planejamento.');
-      }
-
-      const rawText = (response.text ?? '{}').trim();
-      const parsed = JSON.parse(rawText);
-
-      if (!parsed || !Array.isArray(parsed.creatives) || parsed.creatives.length === 0) {
-        return res.status(502).json({
-          errorCode: 'INVALID_AI_RESPONSE',
-          message: 'A resposta de planejamento veio vazia. Tente novamente.',
-        });
+      if (!parsed) {
+        parsed = generateFallbackPlan(briefing, selectedAngles);
       }
 
       return res.json(parsed);

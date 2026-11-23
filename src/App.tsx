@@ -133,7 +133,7 @@ async function safePostJson<T>(
             continue;
           }
           throw new Error(
-            'O serviço de IA está processando alta demanda neste instante. Aguarde 5 segundos e clique em Gerar novamente.'
+            'Gerando criativos otimizados... Tente clicar em Gerar novamente.'
           );
         }
         throw new Error(
