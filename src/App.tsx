@@ -98,8 +98,8 @@ async function safePostJson<T>(
   url: string,
   payload: unknown,
   authToken?: string | null,
-  retries = 3,
-  delayMs = 800
+  retries = 4,
+  delayMs = 1200
 ): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -111,24 +111,29 @@ async function safePostJson<T>(
 
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < retries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout for AI planning
     try {
       const res = await fetch(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
       const text = await res.text();
       let data: unknown = null;
       try {
         data = text ? JSON.parse(text) : null;
       } catch {
-        if (res.status === 404 || res.status === 502 || res.status === 503) {
+        if (res.status === 404 || res.status === 502 || res.status === 503 || res.status === 504) {
           if (attempt < retries - 1) {
             await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
             continue;
           }
           throw new Error(
-            'O servidor está aquecendo ou a rota de API ainda não respondeu. Tente novamente em alguns segundos.'
+            'O serviço de IA está processando alta demanda neste instante. Aguarde 5 segundos e clique em Gerar novamente.'
           );
         }
         throw new Error(
@@ -144,14 +149,18 @@ async function safePostJson<T>(
       }
       return data as T;
     } catch (err) {
+      clearTimeout(timeoutId);
       lastError = err instanceof Error ? err : new Error(String(err));
+      if (err instanceof Error && err.name === 'AbortError') {
+        lastError = new Error('A geração demorou mais que o esperado (tempo limite de 45s). Tente novamente.');
+      }
       if (attempt < retries - 1) {
         await new Promise((r) => setTimeout(r, delayMs * (attempt + 1)));
         continue;
       }
     }
   }
-  throw lastError ?? new Error('Falha de conexão com o servidor.');
+  throw lastError ?? new Error('Falha de conexão com o servidor. Verifique sua internet.');
 }
 
 export default function App() {
