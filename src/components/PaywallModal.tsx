@@ -185,46 +185,60 @@ export function PaywallModal({
               }`}
             >
               {isExpiringMode ? (
-                <div className="space-y-1.5 sm:space-y-2 pr-2">
-                  <div className="flex items-center gap-2 text-amber-300">
-                    <AlertTriangle className="h-5 w-5 shrink-0" />
-                    <h2 id="paywall-title" className="font-display text-lg sm:text-xl font-extrabold">
+                <div className="flex items-start gap-3 space-y-0 pr-2 min-w-0 flex-1">
+                  <img
+                    src="/brand-icon.png"
+                    alt="Criativos Magnéticos"
+                    className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl object-cover ring-1 ring-amber-500/40 shadow-md shadow-amber-500/20 shrink-0"
+                  />
+                  <div className="space-y-1.5 sm:space-y-2 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 text-amber-300">
+                      <AlertTriangle className="h-5 w-5 shrink-0" />
+                      <h2 id="paywall-title" className="font-display text-lg sm:text-xl font-extrabold truncate">
+                        {license.isExpired
+                          ? 'Seu plano venceu!'
+                          : 'Está vencendo seu plano!!'}
+                      </h2>
+                    </div>
+                    <p className="text-xs sm:text-sm leading-relaxed text-slate-200">
                       {license.isExpired
-                        ? 'Seu plano venceu!'
-                        : 'Está vencendo seu plano!!'}
-                    </h2>
+                        ? `O acesso do seu ${license.planLabel} encerrou. Renove agora pelo WhatsApp para continuar gerando seus criativos sem interrupções.`
+                        : `Faltam apenas ${license.daysRemaining} dia(s) para vencer o seu ${license.planLabel}. Garanta a renovação agora e não perca o ritmo das suas campanhas!`}
+                    </p>
                   </div>
-                  <p className="text-xs sm:text-sm leading-relaxed text-slate-200">
-                    {license.isExpired
-                      ? `O acesso do seu ${license.planLabel} encerrou. Renove agora pelo WhatsApp para continuar gerando seus criativos sem interrupções.`
-                      : `Faltam apenas ${license.daysRemaining} dia(s) para vencer o seu ${license.planLabel}. Garanta a renovação agora e não perca o ritmo das suas campanhas!`}
-                  </p>
                 </div>
               ) : (
-                <div className="space-y-2 pr-1">
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                    <h2 id="paywall-title" className="font-display text-lg sm:text-xl font-extrabold text-amber-300">
-                      {msg.greeting}
-                    </h2>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFeedback(null);
-                        onRotateMessage();
-                      }}
-                      title="Ver outra mensagem"
-                      className="inline-flex min-h-[36px] sm:min-h-0 items-center gap-1 rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:text-white transition-colors cursor-pointer"
-                    >
-                      <RefreshCw className="h-3 w-3" />
-                      Outra frase
-                    </button>
-                  </div>
+                <div className="flex items-start gap-3 space-y-0 pr-1 min-w-0 flex-1">
+                  <img
+                    src="/brand-icon.png"
+                    alt="Criativos Magnéticos"
+                    className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl object-cover ring-1 ring-emerald-500/40 shadow-md shadow-emerald-500/20 shrink-0"
+                  />
+                  <div className="space-y-2 min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <h2 id="paywall-title" className="font-display text-lg sm:text-xl font-extrabold text-amber-300">
+                        {msg.greeting}
+                      </h2>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFeedback(null);
+                          onRotateMessage();
+                        }}
+                        title="Ver outra mensagem"
+                        className="inline-flex min-h-[36px] sm:min-h-0 items-center gap-1 rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:text-white transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        Outra frase
+                      </button>
+                    </div>
 
-                  <div className="space-y-1 text-xs sm:text-sm leading-relaxed text-slate-200">
-                    {msg.body.map((line, i) => (
-                      <p key={i}>{line}</p>
-                    ))}
-                    <p className="pt-1 font-semibold text-emerald-400">{msg.ctaHint}</p>
+                    <div className="space-y-1 text-xs sm:text-sm leading-relaxed text-slate-200">
+                      {msg.body.map((line, i) => (
+                        <p key={i}>{line}</p>
+                      ))}
+                      <p className="pt-1 font-semibold text-emerald-400">{msg.ctaHint}</p>
+                    </div>
                   </div>
                 </div>
               )}

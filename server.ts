@@ -400,6 +400,7 @@ function mapGeminiError(err: unknown): { status: number; errorCode: string; mess
 async function startServer() {
   const app = express();
   app.use(express.json({ limit: '25mb' }));
+  app.use(express.static(path.resolve(__dirname, 'public')));
 
   // Health endpoint
   app.get('/api/health', (_req, res) => {

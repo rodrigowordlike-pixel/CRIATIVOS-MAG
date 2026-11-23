@@ -25,6 +25,10 @@ interface StudioSidebarProps {
 
 const BRIEFING_PRESETS = [
   {
+    label: 'Criativos Magnéticos (Meta)',
+    text: 'A imagem é a logo do sistema Criativos Magnéticos. Crie anúncios verticais de alto impacto para Meta Ads (Instagram/Facebook) focados na dor de quem gasta dinheiro com anúncios amadores que não convertem. Destaque que agora é muito mais fácil que nunca gerar anúncios nos 4 formatos com copy AIDA validada em segundos. Oferta a partir de R$ 9,99 com garantia total. Ação: tocar em Saiba Mais.',
+  },
+  {
     label: 'Produto Físico',
     text: 'A imagem mostra um Sérum Capilar Reparador 60ml. Quero um criativo sofisticado e direto ao ponto para Instagram Stories, Reels e Feed. Público: mulheres 25-45 anos que sofrem com queda de cabelo. Oferta: de R$ 189,90 por R$ 119,90 hoje com frete grátis e garantia de 30 dias. Ação: tocar em Saiba Mais para comprar.',
   },
@@ -106,13 +110,25 @@ export function StudioSidebar({
 
   return (
     <aside className="w-full lg:w-[420px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-800/90 bg-[#0E131E] p-4 sm:p-6 flex flex-col gap-5 sm:gap-6">
-      <div>
-        <h1 className="font-display text-xl font-bold tracking-tight text-white">
-          Criativos Altamente Magnéticos
-        </h1>
-        <p className="mt-1 text-xs leading-relaxed text-slate-400">
-          Transforme qualquer foto em anúncios verticais de alta conversão nos 4 formatos do Instagram com copy AIDA pronta.
-        </p>
+      <div className="flex items-start gap-3">
+        <img
+          src="/brand-icon.png"
+          alt="Criativos Magnéticos"
+          className="h-10 w-10 sm:h-11 sm:w-11 rounded-xl object-cover ring-1 ring-emerald-500/40 shadow-md shadow-emerald-500/20 shrink-0 mt-0.5"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight text-white truncate">
+              Criativos Magnéticos
+            </h1>
+            <span className="rounded bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+              9:16
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs leading-relaxed text-slate-400">
+            Transforme qualquer foto em anúncios verticais de alta conversão nos 4 formatos do Instagram com copy AIDA pronta.
+          </p>
+        </div>
       </div>
 
       {/* 1. Reference Image Upload */}

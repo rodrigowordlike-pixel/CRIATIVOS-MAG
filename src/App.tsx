@@ -438,6 +438,9 @@ export default function App() {
   };
 
   const handleStartNew = () => {
+    setReferenceImage(null);
+    setReferenceMeta(null);
+    setBriefing('');
     setCurrentItems([]);
     setProductAnalysis(null);
     setErrorMsg(null);
