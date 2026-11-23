@@ -910,3 +910,36 @@ export async function compressImageForApi(sourceDataUrl: string, maxDim = 512): 
   ctx.drawImage(img, 0, 0, w, h);
   return canvas.toDataURL('image/jpeg', 0.8);
 }
+
+/**
+ * Normalizes giant mobile camera uploads (e.g. 12MP HEIC/JPEG) to max 1600px
+ * so mobile browsers stay fast and never run out of canvas memory.
+ */
+export async function normalizeReferenceImage(sourceDataUrl: string, maxDim = 1600): Promise<{
+  dataUrl: string;
+  dimensions: string;
+}> {
+  const img = await loadImage(sourceDataUrl);
+  const largest = Math.max(img.width, img.height);
+  if (largest <= maxDim && sourceDataUrl.startsWith('data:image/')) {
+    return { dataUrl: sourceDataUrl, dimensions: `${img.width}×${img.height}px` };
+  }
+
+  const ratio = largest > maxDim ? maxDim / largest : 1;
+  const w = Math.max(1, Math.round(img.width * ratio));
+  const h = Math.max(1, Math.round(img.height * ratio));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return { dataUrl: sourceDataUrl, dimensions: `${img.width}×${img.height}px` };
+  }
+
+  ctx.drawImage(img, 0, 0, w, h);
+  return {
+    dataUrl: canvas.toDataURL('image/png'),
+    dimensions: `${img.width}×${img.height}px`,
+  };
+}

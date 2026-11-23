@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { ImagePlus, KeyRound, Loader2, Lock, Sparkles, Trash2, UploadCloud } from 'lucide-react';
 import { ANGLE_OPTIONS, AngleKey, GenerationCount, LicenseStatus } from '@/src/types/creative';
+import { normalizeReferenceImage } from '@/src/lib/studioRenderer';
 
 interface StudioSidebarProps {
   referenceImage: string | null;
@@ -69,26 +70,27 @@ export function StudioSidebar({
 
   const handleFile = (file: File) => {
     setUploadError(null);
-    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
-      setUploadError('Formato inválido. Use PNG, JPG ou WEBP.');
+    if (file.type && !file.type.startsWith('image/')) {
+      setUploadError('Formato inválido. Selecione uma imagem (PNG, JPG ou WEBP).');
       return;
     }
-    if (file.size > 12 * 1024 * 1024) {
-      setUploadError('Imagem muito grande. Máximo permitido: 12 MB.');
+    if (file.size > 25 * 1024 * 1024) {
+      setUploadError('Imagem muito grande. Máximo permitido: 25 MB.');
       return;
     }
 
     const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result);
-      const img = new Image();
-      img.onload = () => {
-        onImageSelected(dataUrl, file.name, `${img.width}×${img.height}px`);
-      };
-      img.onerror = () => {
-        setUploadError('Não foi possível ler as dimensões desta imagem.');
-      };
-      img.src = dataUrl;
+    reader.onload = async () => {
+      try {
+        const dataUrl = String(reader.result);
+        const normalized = await normalizeReferenceImage(dataUrl);
+        onImageSelected(normalized.dataUrl, file.name, normalized.dimensions);
+      } catch {
+        setUploadError('Não foi possível abrir esta foto. Tente outra imagem JPG ou PNG.');
+      }
+    };
+    reader.onerror = () => {
+      setUploadError('Erro ao ler o arquivo selecionado.');
     };
     reader.readAsDataURL(file);
   };
@@ -103,7 +105,7 @@ export function StudioSidebar({
   const canSubmit = Boolean(referenceImage) && briefing.trim().length >= 10 && !isGenerating;
 
   return (
-    <aside className="w-full lg:w-[420px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-800/90 bg-[#0E131E] p-6 flex flex-col gap-6">
+    <aside className="w-full lg:w-[420px] shrink-0 border-b lg:border-b-0 lg:border-r border-slate-800/90 bg-[#0E131E] p-4 sm:p-6 flex flex-col gap-5 sm:gap-6">
       <div>
         <h1 className="font-display text-xl font-bold tracking-tight text-white">
           Criativos Altamente Magnéticos
@@ -129,7 +131,7 @@ export function StudioSidebar({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp"
+          accept="image/*"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -154,11 +156,11 @@ export function StudioSidebar({
                 <p className="mt-1 text-[11px] text-emerald-400">
                   Produto preservado sem distorções
                 </p>
-                <div className="mt-2.5 flex items-center gap-2">
+                <div className="mt-2.5 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-200 hover:bg-slate-700 transition-colors cursor-pointer"
+                    className="min-h-[40px] sm:min-h-0 rounded-md border border-slate-700 bg-slate-800/80 px-3 py-1.5 sm:px-2.5 sm:py-1 text-xs sm:text-[11px] font-medium text-slate-200 hover:bg-slate-700 transition-colors cursor-pointer"
                   >
                     Trocar foto
                   </button>
@@ -166,7 +168,7 @@ export function StudioSidebar({
                     type="button"
                     onClick={onClearImage}
                     aria-label="Remover imagem"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-800 px-2 py-1 text-[11px] font-medium text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-colors cursor-pointer"
+                    className="inline-flex min-h-[40px] sm:min-h-0 items-center gap-1 rounded-md border border-slate-800 px-3 py-1.5 sm:px-2 sm:py-1 text-xs sm:text-[11px] font-medium text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-colors cursor-pointer"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                     Remover
@@ -224,12 +226,12 @@ export function StudioSidebar({
 
         <textarea
           id="briefing-input"
-          rows={5}
+          rows={4}
           maxLength={2500}
           value={briefing}
           onChange={(e) => onBriefingChange(e.target.value)}
           placeholder="Conte do que se trata a imagem enviada, como deseja que o criativo fique (estilo, clima, cores), quem é o público, qual a dor, preço/oferta e a ação esperada ao clicar."
-          className="w-full rounded-xl border border-slate-700/90 bg-[#090D16] px-3.5 py-2.5 text-xs leading-relaxed text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
+          className="w-full rounded-xl border border-slate-700/90 bg-[#090D16] px-3.5 py-3 sm:py-2.5 text-base sm:text-xs leading-relaxed text-slate-100 placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
         />
 
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
@@ -239,7 +241,7 @@ export function StudioSidebar({
               key={preset.label}
               type="button"
               onClick={() => onBriefingChange(preset.text)}
-              className="rounded-md border border-slate-800 bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-300 hover:border-slate-600 hover:text-white transition-colors cursor-pointer"
+              className="min-h-[38px] sm:min-h-0 rounded-md border border-slate-800 bg-slate-900 px-2.5 py-1.5 sm:px-2 sm:py-1 text-xs sm:text-[11px] font-medium text-slate-300 hover:border-slate-600 hover:text-white transition-colors cursor-pointer"
             >
               {preset.label}
             </button>
@@ -256,7 +258,7 @@ export function StudioSidebar({
           <button
             type="button"
             onClick={onOpenKeyModal}
-            className={`inline-flex items-center gap-1 text-[11px] font-medium cursor-pointer ${
+            className={`inline-flex min-h-[38px] sm:min-h-0 items-center gap-1 px-2 -mr-2 sm:px-0 sm:mr-0 text-xs sm:text-[11px] font-medium cursor-pointer ${
               license.active
                 ? license.isExpiringSoon
                   ? 'text-amber-300 hover:text-amber-200'
@@ -264,7 +266,7 @@ export function StudioSidebar({
                 : 'text-slate-400 hover:text-amber-300'
             }`}
           >
-            <KeyRound className="h-3 w-3" />
+            <KeyRound className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
             {license.active ? (
               <span>
                 {license.planLabel} · {license.daysRemaining}d
@@ -275,7 +277,7 @@ export function StudioSidebar({
           </button>
         </div>
 
-        <div className="grid grid-cols-4 gap-1 rounded-lg bg-[#090D16] p-1 border border-slate-800">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-1 rounded-lg bg-[#090D16] p-1 border border-slate-800">
           {COUNT_OPTIONS.map((opt) => {
             const isLocked = opt.value > license.maxAngles;
             const isActive = count === opt.value;
@@ -290,7 +292,7 @@ export function StudioSidebar({
                   }
                   onCountChange(opt.value);
                 }}
-                className={`inline-flex items-center justify-center gap-1 rounded-md py-2 text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+                className={`inline-flex min-h-[44px] sm:min-h-0 items-center justify-center gap-1 rounded-md py-2 text-xs sm:text-[11px] font-semibold transition-colors whitespace-nowrap cursor-pointer ${
                   isLocked
                     ? 'text-slate-500 hover:text-slate-300'
                     : isActive
@@ -314,7 +316,7 @@ export function StudioSidebar({
               id="single-angle-select"
               value={singleAngle}
               onChange={(e) => onSingleAngleChange(e.target.value as AngleKey)}
-              className="w-full rounded-lg border border-slate-700/80 bg-[#090D16] px-3 py-2 text-xs text-slate-100 focus:border-amber-400 focus:outline-none"
+              className="min-h-[44px] sm:min-h-0 w-full rounded-lg border border-slate-700/80 bg-[#090D16] px-3 py-2 text-base sm:text-xs text-slate-100 focus:border-amber-400 focus:outline-none"
             >
               {ANGLE_OPTIONS.map((ang) => (
                 <option key={ang.key} value={ang.key}>
@@ -350,7 +352,7 @@ export function StudioSidebar({
         type="button"
         onClick={onSubmit}
         disabled={!canSubmit}
-        className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 py-3.5 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 cursor-pointer"
+        className="mt-auto inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-amber-400 px-5 py-3.5 text-sm font-bold text-slate-950 transition-colors hover:bg-amber-300 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500 cursor-pointer"
       >
         {isGenerating ? (
           <>

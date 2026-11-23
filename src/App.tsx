@@ -39,6 +39,27 @@ const DEFAULT_LICENSE: LicenseStatus = {
 };
 
 const STORAGE_GEN_COUNT_KEY = 'cm_free_generations_used';
+const STORAGE_AUTH_TOKEN_KEY = 'cm_license_auth_token';
+
+function getStoredAuthToken(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_AUTH_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredAuthToken(token: string | null) {
+  try {
+    if (token) {
+      localStorage.setItem(STORAGE_AUTH_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(STORAGE_AUTH_TOKEN_KEY);
+    }
+  } catch {
+    // ignore storage restriction
+  }
+}
 
 function getStoredGenerationCount(): number {
   try {
@@ -95,6 +116,11 @@ async function safePostJson<T>(
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
+    if (res.status === 404) {
+      throw new Error(
+        'O servidor de API não respondeu nesta URL (HTTP 404). Se estiver no link compartilhado, aguarde a publicação concluir ou acesse pelo link principal do estúdio.'
+      );
+    }
     throw new Error(
       `O servidor retornou uma resposta inesperada (HTTP ${res.status}). Recarregue a página e tente novamente.`
     );
@@ -128,20 +154,30 @@ export default function App() {
 
   const [generationsUsed, setGenerationsUsed] = useState<number>(() => getStoredGenerationCount());
   const [license, setLicense] = useState<LicenseStatus>(DEFAULT_LICENSE);
-  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(() => getStoredAuthToken());
 
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [paywallMode, setPaywallMode] = useState<PaywallModalMode>('paywall');
   const [paywallMsgIdx, setPaywallMsgIdx] = useState(0);
+  const [mobileTab, setMobileTab] = useState<'setup' | 'results'>('setup');
 
   // Check license status on mount and show "Está vencendo seu plano!!" popup whenever close to expiry or expired
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/license/status')
+    const savedToken = getStoredAuthToken();
+    const headers: Record<string, string> = {};
+    if (savedToken) {
+      headers['Authorization'] = `Bearer ${savedToken}`;
+    }
+    fetch('/api/license/status', { headers })
       .then((r) => (r.ok ? r.json() : null))
       .then((status: LicenseStatus | null) => {
         if (cancelled || !status) return;
         setLicense(status);
+        if (!status.active && !status.isExpired && savedToken) {
+          saveStoredAuthToken(null);
+          setAuthToken(null);
+        }
         if (status.isExpiringSoon || status.isExpired) {
           setPaywallMode('expiring');
           setIsPaywallOpen(true);
@@ -187,6 +223,7 @@ export default function App() {
       );
       if (res.token) {
         setAuthToken(res.token);
+        saveStoredAuthToken(res.token);
       }
       setLicense({
         active: res.active,
@@ -232,6 +269,8 @@ export default function App() {
     setIsGenerating(true);
     setErrorMsg(null);
     setCurrentItems([]);
+    setMobileTab('results');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 
     try {
       const apiImage = await compressImageForApi(referenceImage);
@@ -263,6 +302,7 @@ export default function App() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erro inesperado ao gerar criativos.';
       setErrorMsg(msg);
+      setMobileTab('setup');
     } finally {
       setIsGenerating(false);
     }
@@ -328,6 +368,8 @@ export default function App() {
     setCurrentItems([]);
     setProductAnalysis(null);
     setErrorMsg(null);
+    setMobileTab('setup');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -339,44 +381,80 @@ export default function App() {
         onStartNew={handleStartNew}
       />
 
-      <div className="flex-1 flex flex-col lg:flex-row">
-        <StudioSidebar
-          referenceImage={referenceImage}
-          referenceMeta={referenceMeta}
-          onImageSelected={(dataUrl, name, dimensions) => {
-            setReferenceImage(dataUrl);
-            setReferenceMeta({ name, dimensions });
-            setErrorMsg(null);
-          }}
-          onClearImage={() => {
-            setReferenceImage(null);
-            setReferenceMeta(null);
-          }}
-          briefing={briefing}
-          onBriefingChange={setBriefing}
-          count={count}
-          onCountChange={setCount}
-          singleAngle={singleAngle}
-          onSingleAngleChange={setSingleAngle}
-          license={license}
-          isGenerating={isGenerating}
-          progressText={progressText}
-          errorMsg={errorMsg}
-          onUpgradeClick={() => openPlayfulPaywall(license.isExpiringSoon ? 'expiring' : 'paywall')}
-          onOpenKeyModal={() =>
-            openPlayfulPaywall(license.isExpiringSoon || license.isExpired ? 'expiring' : 'activate')
-          }
-          onSubmit={handleGenerate}
-        />
+      {/* Mobile Workspace Switcher (< lg) */}
+      <div className="lg:hidden border-b border-slate-800/90 bg-[#0E131E] px-4 py-2.5">
+        <div className="grid grid-cols-2 gap-1 rounded-lg bg-[#090D16] p-1 border border-slate-800">
+          <button
+            type="button"
+            onClick={() => setMobileTab('setup')}
+            className={`min-h-[42px] rounded-md px-3 text-xs font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+              mobileTab === 'setup'
+                ? 'bg-slate-800 text-amber-300 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            1. Configurar
+          </button>
+          <button
+            type="button"
+            onClick={() => setMobileTab('results')}
+            className={`min-h-[42px] rounded-md px-3 text-xs font-semibold transition-colors whitespace-nowrap cursor-pointer ${
+              mobileTab === 'results'
+                ? 'bg-slate-800 text-amber-300 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            {isGenerating
+              ? '2. Gerando...'
+              : currentItems.length > 0
+              ? `2. Criativos (${currentItems.length})`
+              : '2. Guia e Entrega'}
+          </button>
+        </div>
+      </div>
 
-        <CreativeGallery
-          items={currentItems}
-          productAnalysis={productAnalysis}
-          isGenerating={isGenerating}
-          progressText={progressText}
-          onDownloadSingle={triggerDownload}
-          onUpdateItemAida={handleUpdateItemAida}
-        />
+      <div className="flex-1 flex flex-col lg:flex-row">
+        <div className={mobileTab === 'setup' ? 'block lg:flex' : 'hidden lg:flex'}>
+          <StudioSidebar
+            referenceImage={referenceImage}
+            referenceMeta={referenceMeta}
+            onImageSelected={(dataUrl, name, dimensions) => {
+              setReferenceImage(dataUrl);
+              setReferenceMeta({ name, dimensions });
+              setErrorMsg(null);
+            }}
+            onClearImage={() => {
+              setReferenceImage(null);
+              setReferenceMeta(null);
+            }}
+            briefing={briefing}
+            onBriefingChange={setBriefing}
+            count={count}
+            onCountChange={setCount}
+            singleAngle={singleAngle}
+            onSingleAngleChange={setSingleAngle}
+            license={license}
+            isGenerating={isGenerating}
+            progressText={progressText}
+            errorMsg={errorMsg}
+            onUpgradeClick={() => openPlayfulPaywall(license.isExpiringSoon ? 'expiring' : 'paywall')}
+            onOpenKeyModal={() =>
+              openPlayfulPaywall(license.isExpiringSoon || license.isExpired ? 'expiring' : 'activate')
+            }
+            onSubmit={handleGenerate}
+          />
+        </div>
+
+        <div className={mobileTab === 'results' ? 'flex-1 flex flex-col min-w-0' : 'hidden lg:flex flex-1 flex-col min-w-0'}>
+          <CreativeGallery
+            items={currentItems}
+            productAnalysis={productAnalysis}
+            isGenerating={isGenerating}
+            progressText={progressText}
+            onDownloadSingle={triggerDownload}
+            onUpdateItemAida={handleUpdateItemAida}
+          />
+        </div>
       </div>
 
       <PaywallModal

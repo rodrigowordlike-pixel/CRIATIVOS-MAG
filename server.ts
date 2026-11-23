@@ -5,23 +5,43 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type, ThinkingLevel } from '@google/genai';
-import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const ALLOWED_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const VALID_COUNTS = new Set([1, 3, 5, 10]);
 const DAY_MS = 86_400_000;
 const EXPIRING_SOON_DAYS = 5;
 const LICENSE_COOKIE_NAME = 'cm_license_token';
-const LICENSE_SIGNING_SECRET =
-  process.env.LICENSE_SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const DATA_DIR = path.resolve(__dirname, '.data');
 const LICENSE_STORE_FILE = path.join(DATA_DIR, 'licenses.json');
+const SESSION_SECRET_FILE = path.join(DATA_DIR, 'session.secret');
+
+function loadOrCreateSigningSecret(): string {
+  if (process.env.LICENSE_SESSION_SECRET) {
+    return process.env.LICENSE_SESSION_SECRET;
+  }
+  try {
+    if (fs.existsSync(SESSION_SECRET_FILE)) {
+      const existing = fs.readFileSync(SESSION_SECRET_FILE, 'utf8').trim();
+      if (existing.length >= 32) return existing;
+    }
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    const created = crypto.randomBytes(32).toString('hex');
+    fs.writeFileSync(SESSION_SECRET_FILE, created, 'utf8');
+    return created;
+  } catch {
+    return crypto.randomBytes(32).toString('hex');
+  }
+}
+
+const LICENSE_SIGNING_SECRET = loadOrCreateSigningSecret();
 
 interface LicensePlanSpec {
   planId: '30d' | '90d' | '120d';
@@ -64,22 +84,33 @@ interface ActivatedLicenseRecord {
   expiresAt: number;
 }
 
+let memoryLicenseStore: Record<string, ActivatedLicenseRecord> = {};
+
 function readLicenseStore(): Record<string, ActivatedLicenseRecord> {
   try {
-    if (!fs.existsSync(LICENSE_STORE_FILE)) return {};
+    if (!fs.existsSync(LICENSE_STORE_FILE)) return { ...memoryLicenseStore };
     const raw = fs.readFileSync(LICENSE_STORE_FILE, 'utf8');
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    if (parsed && typeof parsed === 'object') {
+      memoryLicenseStore = parsed as Record<string, ActivatedLicenseRecord>;
+      return memoryLicenseStore;
+    }
+    return { ...memoryLicenseStore };
   } catch {
-    return {};
+    return { ...memoryLicenseStore };
   }
 }
 
 function writeLicenseStore(store: Record<string, ActivatedLicenseRecord>) {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  memoryLicenseStore = { ...store };
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(LICENSE_STORE_FILE, JSON.stringify(store, null, 2), 'utf8');
+  } catch {
+    // Fallback gracefully to in-memory store if filesystem is read-only
   }
-  fs.writeFileSync(LICENSE_STORE_FILE, JSON.stringify(store, null, 2), 'utf8');
 }
 
 function signLicenseToken(keyHash: string): string {
@@ -319,7 +350,11 @@ async function startServer() {
       });
     }
 
-    const normalizedKey = rawKey.trim().toUpperCase();
+    const normalizedKey = rawKey
+      .trim()
+      .toUpperCase()
+      .replace(/[\u2010-\u2015\u2212]/g, '-')
+      .replace(/\s+/g, '');
     const keyHash = crypto.createHash('sha256').update(normalizedKey).digest('hex');
     const spec = LICENSE_HASH_CATALOG[keyHash];
 
@@ -582,8 +617,14 @@ REGRAS:
         } catch (err) {
           lastErr = err;
           const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
-          const isTransient = msg.includes('503') || msg.includes('unavailable') || msg.includes('500');
-          if (!isTransient || attempt === modelsToTry.length - 1) {
+          const canRetry =
+            msg.includes('503') ||
+            msg.includes('unavailable') ||
+            msg.includes('500') ||
+            msg.includes('404') ||
+            msg.includes('not_found') ||
+            msg.includes('429');
+          if (!canRetry || attempt === modelsToTry.length - 1) {
             throw err;
           }
           await new Promise((r) => setTimeout(r, 150));
@@ -746,14 +787,17 @@ Render ALL text below in crisp, ultra-legible Brazilian Portuguese with dark con
     return next(err);
   });
 
-  if (process.env.NODE_ENV !== 'production') {
+  const distPath = path.resolve(__dirname, 'dist');
+  const hasDistBuild = fs.existsSync(path.join(distPath, 'index.html'));
+
+  if (process.env.NODE_ENV !== 'production' || !hasDistBuild) {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(__dirname, 'dist');
     app.use(express.static(distPath));
     app.get('*', (_req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

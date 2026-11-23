@@ -165,45 +165,45 @@ export function PaywallModal({
           role="dialog"
           aria-modal="true"
           aria-labelledby="paywall-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 p-2 sm:p-4 backdrop-blur-sm"
           onClick={onClose}
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 10 }}
+            initial={{ opacity: 0, scale: 0.96, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 10 }}
+            exit={{ opacity: 0, scale: 0.96, y: 16 }}
             transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-700/80 bg-[#0E131E] shadow-2xl"
+            className="relative flex max-h-[92dvh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-slate-700/80 bg-[#0E131E] shadow-2xl"
           >
             {/* Top Header */}
             <div
-              className={`flex items-start justify-between gap-4 border-b px-6 py-5 ${
+              className={`flex shrink-0 items-start justify-between gap-3 sm:gap-4 border-b px-4 py-4 sm:px-6 sm:py-5 ${
                 isExpiringMode
                   ? 'border-amber-500/40 bg-amber-950/30'
                   : 'border-slate-800 bg-[#121826]'
               }`}
             >
               {isExpiringMode ? (
-                <div className="space-y-2 pr-4">
+                <div className="space-y-1.5 sm:space-y-2 pr-2">
                   <div className="flex items-center gap-2 text-amber-300">
                     <AlertTriangle className="h-5 w-5 shrink-0" />
-                    <h2 id="paywall-title" className="font-display text-xl font-extrabold">
+                    <h2 id="paywall-title" className="font-display text-lg sm:text-xl font-extrabold">
                       {license.isExpired
                         ? 'Seu plano venceu!'
                         : 'Está vencendo seu plano!!'}
                     </h2>
                   </div>
-                  <p className="text-sm leading-relaxed text-slate-200">
+                  <p className="text-xs sm:text-sm leading-relaxed text-slate-200">
                     {license.isExpired
                       ? `O acesso do seu ${license.planLabel} encerrou. Renove agora pelo WhatsApp para continuar gerando seus criativos sem interrupções.`
                       : `Faltam apenas ${license.daysRemaining} dia(s) para vencer o seu ${license.planLabel}. Garanta a renovação agora e não perca o ritmo das suas campanhas!`}
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2 pr-4">
-                  <div className="flex items-center gap-3">
-                    <h2 id="paywall-title" className="font-display text-xl font-extrabold text-amber-300">
+                <div className="space-y-2 pr-1">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <h2 id="paywall-title" className="font-display text-lg sm:text-xl font-extrabold text-amber-300">
                       {msg.greeting}
                     </h2>
                     <button
@@ -213,14 +213,14 @@ export function PaywallModal({
                         onRotateMessage();
                       }}
                       title="Ver outra mensagem"
-                      className="inline-flex items-center gap-1 rounded-md border border-slate-700 bg-slate-800/80 px-2 py-1 text-[11px] font-medium text-slate-300 hover:text-white transition-colors cursor-pointer"
+                      className="inline-flex min-h-[36px] sm:min-h-0 items-center gap-1 rounded-md border border-slate-700 bg-slate-800/80 px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:text-white transition-colors cursor-pointer"
                     >
                       <RefreshCw className="h-3 w-3" />
                       Outra frase
                     </button>
                   </div>
 
-                  <div className="space-y-1 text-sm leading-relaxed text-slate-200">
+                  <div className="space-y-1 text-xs sm:text-sm leading-relaxed text-slate-200">
                     {msg.body.map((line, i) => (
                       <p key={i}>{line}</p>
                     ))}
@@ -233,15 +233,15 @@ export function PaywallModal({
                 type="button"
                 onClick={onClose}
                 aria-label="Fechar janela"
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer shrink-0"
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer shrink-0 -mr-1.5 -mt-1.5 sm:mr-0 sm:mt-0 sm:min-h-0 sm:min-w-0 sm:p-1.5"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* 3 Offer Cards -> direct WhatsApp links */}
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+            {/* Scrollable Body: 3 Offer Cards -> direct WhatsApp links */}
+            <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4 sm:space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-3.5">
                 {PLAN_OPTIONS.map((plan) => {
                   const isSelected = plan.id === selectedPlanId;
                   return (
@@ -257,7 +257,7 @@ export function PaywallModal({
                           text: `Abrindo WhatsApp (41) 99822-1261 para solicitar a chave do plano de ${plan.durationLabel} (${plan.price}).`,
                         });
                       }}
-                      className={`relative flex flex-col justify-between rounded-xl border p-4 text-left transition-all cursor-pointer ${
+                      className={`relative flex flex-col justify-between rounded-xl border p-3.5 sm:p-4 text-left transition-all cursor-pointer ${
                         isSelected
                           ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400/50'
                           : 'border-slate-800 bg-[#090D16] hover:border-slate-600'
@@ -275,16 +275,16 @@ export function PaywallModal({
                           )}
                         </div>
 
-                        <div className="mt-2.5 flex items-baseline gap-1.5">
+                        <div className="mt-2 sm:mt-2.5 flex items-baseline justify-between sm:block gap-2">
                           <span className="font-display text-2xl font-extrabold text-white tabular-nums">
                             {plan.price}
                           </span>
+                          <span className="block font-mono text-[11px] text-slate-400 tabular-nums">
+                            {plan.perDay}
+                          </span>
                         </div>
-                        <span className="block font-mono text-[11px] text-slate-400 tabular-nums">
-                          {plan.perDay}
-                        </span>
 
-                        <ul className="mt-3.5 space-y-1.5 border-t border-slate-800/90 pt-3">
+                        <ul className="mt-3 sm:mt-3.5 space-y-1.5 border-t border-slate-800/90 pt-2.5 sm:pt-3">
                           {plan.perks.map((perk) => (
                             <li key={perk} className="flex items-start gap-1.5 text-[11px] text-slate-300">
                               <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />
@@ -322,36 +322,36 @@ export function PaywallModal({
                       text: `Abrindo WhatsApp (41) 99822-1261 para solicitar a chave do plano de ${selectedPlan.durationLabel} (${selectedPlan.price}).`,
                     })
                   }
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3.5 text-sm font-extrabold text-slate-950 transition-colors hover:bg-emerald-400 cursor-pointer"
+                  className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-center text-xs sm:text-sm font-extrabold leading-snug text-slate-950 transition-colors hover:bg-emerald-400 cursor-pointer"
                 >
-                  <Sparkles className="h-4 w-4" />
+                  <Sparkles className="h-4 w-4 shrink-0" />
                   <span>
                     {isExpiringMode ? 'Renovar' : 'Pedir chave de'} {selectedPlan.durationLabel} (
                     {selectedPlan.price}) no WhatsApp
                   </span>
                 </a>
 
-                <div className="flex items-center justify-between gap-4 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
                   <button
                     type="button"
                     onClick={() => setShowKeyInput((v) => !v)}
-                    className="inline-flex items-center gap-1.5 text-amber-300 hover:text-amber-200 font-medium cursor-pointer"
+                    className="inline-flex min-h-[44px] sm:min-h-0 items-center gap-1.5 text-amber-300 hover:text-amber-200 font-medium cursor-pointer"
                   >
-                    <KeyRound className="h-3.5 w-3.5" />
+                    <KeyRound className="h-3.5 w-3.5 shrink-0" />
                     <span>Já tenho uma chave de acesso</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={onClose}
-                    className="text-slate-500 hover:text-slate-300 cursor-pointer"
+                    className="min-h-[44px] sm:min-h-0 px-2 text-slate-400 hover:text-slate-200 cursor-pointer"
                   >
                     Fechar
                   </button>
                 </div>
 
                 {showKeyInput && (
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
                     <input
                       type="text"
                       value={accessCode}
@@ -362,14 +362,14 @@ export function PaywallModal({
                           handleValidateCode();
                         }
                       }}
-                      placeholder="Cole sua chave aqui (ex: CM30-XXXX-XXXX)"
-                      className="flex-1 rounded-lg border border-slate-700 bg-[#090D16] px-3 py-2 text-xs font-mono uppercase text-slate-100 placeholder:normal-case placeholder:font-sans placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
+                      placeholder="Cole sua chave (ex: CM30-XXXX-XXXX)"
+                      className="min-h-[44px] flex-1 rounded-lg border border-slate-700 bg-[#090D16] px-3 py-2 text-base sm:text-xs font-mono uppercase text-slate-100 placeholder:normal-case placeholder:font-sans placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
                     />
                     <button
                       type="button"
                       onClick={handleValidateCode}
                       disabled={isValidating}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-300 cursor-pointer shrink-0 disabled:opacity-60"
+                      className="inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-amber-300 cursor-pointer shrink-0 disabled:opacity-60"
                     >
                       {isValidating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                       <span>Ativar Plano</span>
